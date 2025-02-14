@@ -1,0 +1,207 @@
+import { PaymentProvider, PaymentGatewayResponse } from '../../types/payment';
+import { Payment } from '../../types';
+import { ukPaymentService } from './paymentServiceInstance';
+
+// Interfaces para diferentes payment gateways
+interface WorldpayConfig {
+    merchantId: string;
+    apiKey: string;
+    terminalId?: string;
+}
+
+interface SumUpConfig {
+    apiKey: string;
+    merchantCode: string;
+    affiliateKey: string;
+}
+
+interface StripeUKConfig {
+    publicKey: string;
+    secretKey: string;
+    webhookSecret: string;
+}
+
+class UKPaymentService {
+    private worldpayConfig?: WorldpayConfig;
+    private sumUpConfig?: SumUpConfig;
+    private stripeConfig?: StripeUKConfig;
+    private activeProvider: PaymentProvider;
+
+    constructor(provider: PaymentProvider = 'worldpay') {
+        this.activeProvider = provider;
+        this.initializeConfigs();
+    }
+
+    private initializeConfigs() {
+        this.worldpayConfig = {
+            merchantId: import.meta.env.VITE_WORLDPAY_MERCHANT_ID || '',
+            apiKey: import.meta.env.VITE_WORLDPAY_API_KEY || '',
+            terminalId: import.meta.env.VITE_WORLDPAY_TERMINAL_ID
+        };
+
+        this.sumUpConfig = {
+            apiKey: import.meta.env.VITE_SUMUP_API_KEY || '',
+            merchantCode: import.meta.env.VITE_SUMUP_MERCHANT_CODE || '',
+            affiliateKey: import.meta.env.VITE_SUMUP_AFFILIATE_KEY || ''
+        };
+
+        this.stripeConfig = {
+            publicKey: import.meta.env.VITE_STRIPE_UK_PUBLIC_KEY || '',
+            secretKey: import.meta.env.VITE_STRIPE_UK_SECRET_KEY || '',
+            webhookSecret: import.meta.env.VITE_STRIPE_UK_WEBHOOK_SECRET || ''
+        };
+    }
+
+    async processCardPayment(amount: number, currency: string = 'GBP'): Promise<Payment> {
+        let gatewayResponse: PaymentGatewayResponse;
+
+        if (currency !== 'GBP') {
+            throw new Error('Only GBP currency is supported at the moment');
+        }
+
+        switch (this.activeProvider) {
+            case 'worldpay':
+                gatewayResponse = await this.processWorldpayPayment(amount);
+                break;
+            case 'sumup':
+                gatewayResponse = await this.processSumUpPayment(amount);
+                break;
+            case 'stripe':
+                gatewayResponse = await this.processStripePayment(amount);
+                break;
+            default:
+                throw new Error('Unsupported payment provider');
+        }
+
+        if (gatewayResponse.status !== 'success') {
+            throw new Error(gatewayResponse.errorMessage || 'Payment failed');
+        }
+
+        const payment: Payment = {
+            id: gatewayResponse.id,
+            method: 'card',
+            amount: gatewayResponse.amount,
+            reference: gatewayResponse.reference,
+            status: 'approved',
+            processedAt: new Date()
+        };
+
+        return payment;
+    }
+
+    private async processWorldpayPayment(amount: number): Promise<PaymentGatewayResponse> {
+        try {
+            const response = await fetch('https://api.worldpay.com/v1/payments', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.worldpayConfig?.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    merchantId: this.worldpayConfig?.merchantId,
+                    terminalId: this.worldpayConfig?.terminalId,
+                    amount: amount,
+                    currency: 'GBP',
+                    paymentMethod: 'CARD',
+                    captureMode: 'AUTO'
+                })
+            });
+
+            const data = await response.json();
+            
+            return {
+                id: data.id || `WP-${Date.now()}`,
+                status: data.status === 'SUCCESS' ? 'success' : 'failed',
+                amount: amount,
+                currency: 'GBP',
+                reference: data.reference,
+                errorMessage: data.errorMessage
+            };
+        } catch (error) {
+            console.error('Worldpay payment failed:', error);
+            return {
+                id: `ERROR-${Date.now()}`,
+                status: 'failed',
+                amount: amount,
+                currency: 'GBP',
+                errorMessage: error instanceof Error ? error.message : 'Payment processing failed'
+            };
+        }
+    }
+
+    private async processSumUpPayment(amount: number): Promise<PaymentGatewayResponse> {
+        try {
+            const response = await fetch('https://api.sumup.com/v0.1/payments', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.sumUpConfig?.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    amount,
+                    currency: 'GBP',
+                    merchantCode: this.sumUpConfig?.merchantCode
+                })
+            });
+
+            const data = await response.json();
+            
+            return {
+                id: data.id || `SU-${Date.now()}`,
+                status: data.status === 'PAID' ? 'success' : 'failed',
+                amount: amount,
+                currency: 'GBP',
+                reference: data.reference,
+                errorMessage: data.errorMessage
+            };
+        } catch (error) {
+            console.error('SumUp payment failed:', error);
+            return {
+                id: `ERROR-${Date.now()}`,
+                status: 'failed',
+                amount: amount,
+                currency: 'GBP',
+                errorMessage: error instanceof Error ? error.message : 'Payment processing failed'
+            };
+        }
+    }
+
+    private async processStripePayment(amount: number): Promise<PaymentGatewayResponse> {
+        try {
+            const response = await fetch('https://api.stripe.com/v1/payment_intents', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.stripeConfig?.secretKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    amount,
+                    currency: 'gbp',
+                    payment_method_types: ['card', 'link']
+                })
+            });
+
+            const data = await response.json();
+            
+            return {
+                id: data.id || `ST-${Date.now()}`,
+                status: data.status === 'succeeded' ? 'success' : 'failed',
+                amount: amount,
+                currency: 'GBP',
+                reference: data.reference,
+                errorMessage: data.error?.message
+            };
+        } catch (error) {
+            console.error('Stripe payment failed:', error);
+            return {
+                id: `ERROR-${Date.now()}`,
+                status: 'failed',
+                amount: amount,
+                currency: 'GBP',
+                errorMessage: error instanceof Error ? error.message : 'Payment processing failed'
+            };
+        }
+    }
+}
+
+export { UKPaymentService }=[ukPaymentService]
