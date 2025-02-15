@@ -1,5 +1,5 @@
 {
-  "name": "erp-uk",
+  "name": "meowdit",
   "version": "1.0.0",
   "description": "Modern ERP system focused on UK market.",
   "main": "index.js",
@@ -11,13 +11,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/robsbrz/erp-uk.git"
+    "url": "git+https://github.com/robsbrz/meowdit.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/robsbrz/erp-uk/issues"
+    "url": "https://github.com/robsbrz/meowdit/issues"
   },
-  "homepage": "https://github.com/robsbrz/erp-uk#readme"
+  "homepage": "https://github.com/robsbrz/meowdit#readme"
 }

@@ -34,6 +34,13 @@ export class TemplateService {
     });
   }
 
+  async getTemplateByName(name: string) {
+    return await this.templateRepository.findOne({
+      where: { name },
+      relations: ['customFields']
+    });
+  }
+
   async addCustomField(templateId: string, fieldData: Partial<CustomField>) {
     const template = await this.templateRepository.findOne({
       where: { id: templateId }
@@ -95,6 +102,14 @@ export class TemplateService {
 
     if (!template.name) {
       errors.push('Template name is required');
+    }
+
+    // Verificação de nome único
+    if (template.name) {
+      const existingTemplate = await this.getTemplateByName(template.name);
+      if (existingTemplate && existingTemplate.id !== template.id) {
+        errors.push('Template name must be unique');
+      }
     }
 
     if (!template.modules || Object.keys(template.modules).length === 0) {
