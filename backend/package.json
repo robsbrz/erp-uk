@@ -1,5 +1,5 @@
 {
-  "name": "erp-uk-backend",
+  "name": "meowdit-backend",
   "version": "1.0.0",
   "description": "Backend for ERP UK",
   "main": "build/server.js",
