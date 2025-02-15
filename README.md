@@ -1,4 +1,4 @@
-# ERP UK System
+# Meowdit System
 
 Modern ERP system focused on UK market.
 
